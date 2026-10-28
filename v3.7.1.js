@@ -1,5 +1,5 @@
 /* =========================================================
-   TORRE CELESTE BETTING — torre-celeste.js  (v3.7.0)
+   TORRE CELESTE BETTING — torre-celeste.js  (v3.7.1)
    Carica via jsDelivr. La config Firebase va nell'HTML
    come window.BET_FB_CONFIG.
 
@@ -115,11 +115,16 @@
        (e le quote, se non ci sono NPC). Chiave hb_open_<id>.
      - Dichiarazione del vincitore: post di chiusura. Chiave
        hb_close_<id>. Le chiavi impediscono i doppioni.
-     - Richiede hunternet-autopost-v1.0.0.js caricato nella pagina:
+     - Richiede hunternet-autopost (v1.1.0 dalla v3.7.1) caricato nella pagina:
        se manca, l'incontro viene creato/concluso lo stesso e un
        toast avvisa che il post non e' partito.
      - Il link del post punta alla pagina di Heaven's Bet; le
        immagini sono quelle dei combattenti (max 4).
+
+   v3.7.1 — Post HunterNet: niente post (apertura e chiusura) per gli
+     incontri con NPC. La card del link mostra l'indirizzo finto
+     heavensbet.na/incontri/#nome_incontro (richiede hunternet-autopost
+     v1.1.0 e HunterNet v14.9.0); il clic apre la pagina vera.
    ========================================================= */
 (function () {
   "use strict";
@@ -2533,6 +2538,15 @@
 
     function hn_quota(q) { return String(q).replace(".", ","); }
     function hn_link() { return location.href.split("#")[0]; }
+    /* indirizzo finto mostrato nella card: minuscolo, senza accenti,
+       tutto cio' che non e' lettera o numero diventa "_" */
+    function hn_slug(t) {
+      t = String(t || "").toLowerCase();
+      if (t.normalize) t = t.normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "");
+      t = t.replace(new RegExp("[^a-z0-9]+", "g"), "_").replace(new RegExp("^_+|_+$", "g"), "");
+      if (t.length > 60) t = t.slice(0, 60).replace(new RegExp("_[^_]*$"), "");
+      return t || "incontro";
+    }
     function hn_immagini(s) {
       var mem = membri_di(s), out = [];
       for (var i = 0; i < mem.length && out.length < 4; i++) {
@@ -2551,28 +2565,28 @@
         images: hn_immagini(s),
         linkUrl: hn_link(),
         linkTitle: "Heaven's Bet - " + s.titolo,
+        linkDisplay: "heavensbet.na/incontri/#" + hn_slug(s.titolo),
         key: chiave
       }).catch(function(e) {
         toast("Post su HunterNet non inviato: " + ((e && e.message) || "errore"), "err");
       });
     }
+    /* incontri con NPC: nessun post, ne' di apertura ne' di chiusura */
     function hn_post_apertura(s) {
+      if (s.ha_npc) return;
       var sqs = squadre_di(s), voci = [];
       for (var i = 0; i < sqs.length; i++) {
-        voci.push(nome_squadra(sqs[i]) + (s.ha_npc ? "" : " (quota " + hn_quota(sqs[i].quota) + ")"));
+        voci.push(nome_squadra(sqs[i]) + " (quota " + hn_quota(sqs[i].quota) + ")");
       }
-      var testo = s.ha_npc
-        ? "Nuovo incontro alla Torre Celeste: " + voci.join(" VS ") +
-          ". Per questo incontro le scommesse non sono previste. #TorreCeleste"
-        : "Scommesse aperte! " + voci.join(" VS ") +
-          ". Piazzate le vostre puntate su Heaven's Bet prima della chiusura. #TorreCeleste #HeavensBet";
+      var testo = "Scommesse aperte! " + voci.join(" VS ") +
+        ". Piazzate le vostre puntate su Heaven's Bet prima della chiusura. #TorreCeleste #HeavensBet";
       hn_pubblica(testo, s, "hb_open_" + s.id);
     }
     function hn_post_chiusura(s, nome_v, n_squadra) {
+      if (s.ha_npc) return;
       var verbo = n_squadra > 1 ? " vincono " : " vince ";
       var testo = "Incontro concluso alla Torre Celeste: " + nome_v + verbo + "\"" + s.titolo + "\"." +
-        (s.ha_npc ? "" : " Complimenti a chi aveva puntato sul vincitore.") +
-        " #TorreCeleste" + (s.ha_npc ? "" : " #HeavensBet");
+        " Complimenti a chi aveva puntato sul vincitore. #TorreCeleste #HeavensBet";
       hn_pubblica(testo, s, "hb_close_" + s.id);
     }
 
